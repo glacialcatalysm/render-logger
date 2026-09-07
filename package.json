@@ -1,15 +1,13 @@
 {
-  "name": "render-logger",
+  "name": "ip-logger",
   "version": "1.0.0",
-  "description": "An educational IP, ISP, and location tracking logger deployed on Render.",
+  "description": "Educational tracking and redirect utility",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.19.2"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "axios": "^1.7.7",
+    "express": "^4.21.0"
   }
 }
