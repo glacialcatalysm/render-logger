@@ -16,11 +16,17 @@ app.get('/', async (req, res) => {
     };
 
     try {
-        // 2. Extract the real user IP behind Render's routing proxies
-        const rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-        let userIp = rawIp ? rawIp.split(',')[0].trim() : '127.0.0.1';
+        const rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
+// Split by comma, take the first IP, remove all spaces, and clean up any hidden characters
+let userIp = rawIp.split(',')[0].trim().replace(/[^0-9a-fA-F.:]/g, '');
 
-        // Localhost safety check for local environment testing
+if (!userIp) {
+    userIp = '8.8.8.8';
+}
+
+Send a message...
+
+// Localhost safety check for locronment testing
         if (userIp === '::1' || userIp === '::ffff:127.0.0.1') {
             userIp = '8.8.8.8'; // Mock IP (Google DNS) for local testing purposes
         }
