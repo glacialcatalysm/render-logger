@@ -5,7 +5,7 @@ const app = express();
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK;
 const REDIRECT_URL = process.env.REDIRECT_URL || 'https://guns.lol/xsaint'; 
 
-app.get('/visit', async (req, res) => {
+app.get('/', async (req, res) => {
     let clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     
     if (clientIp && clientIp.includes(',')) {
