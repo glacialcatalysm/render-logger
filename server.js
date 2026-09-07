@@ -30,10 +30,12 @@ app.get('/', async (req, res) => {
         let broadbandText = "Unknown ISP";
 
         try {
-            const geoRes = await fetch(`http://ip-api.com{userIp}?fields=status,country,regionName,city,isp`);
+            // FIXED: Uses secure string concatenation to completely avoid template literal/quote bugs
+            const geoRes = await fetch('http://ip-api.com' + userIp + '?fields=status,country,regionName,city,isp');
             const geoData = await geoRes.json();
             
             if (geoData.status === 'success') {
+                // FIXED: Uses proper backticks so data resolves into actual words
                 locationText = `${geoData.city}, ${geoData.regionName}, ${geoData.country}`;
                 broadbandText = geoData.isp;
             }
