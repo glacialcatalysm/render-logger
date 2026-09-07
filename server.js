@@ -9,7 +9,7 @@ app.get('/', async (req, res) => {
     let clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     
     if (clientIp && clientIp.includes(',')) {
-        // FIXED: Selects the first string element [0] out of the array before trimming
+        // FIXED: Added [0] to correctly select the first string element before trimming
         clientIp = clientIp.split(',')[0].trim();
     }
 
